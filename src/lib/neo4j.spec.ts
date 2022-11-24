@@ -1,12 +1,27 @@
 import type { StepDefinitions } from 'jest-cucumber';
 import { autoBindSteps, loadFeature } from 'jest-cucumber';
-import { readFromNeo4J } from '../lib/neo4j';
 import { isCodeAndMessage, isErrorResponse } from '../utils/errors';
 import {
   hasAtLeast,
   mapToSouthAmericanWorldCupWinner,
   SouthAmericanWorldCupWinner,
 } from '../utils/types';
+import { clearConnections, readFromNeo4J } from './neo4j';
+
+jest.mock('neo4j-driver', () => {
+  return {
+    __esModule: true,
+    auth: {
+      basic: () => {},
+    },
+    driver: jest.fn().mockImplementation(() => ({
+      session: () => ({
+        executeRead: () => dataset,
+      }),
+    })),
+    session: { READ: 'READ', WRITE: 'WRITE' },
+  };
+});
 
 const feature = loadFeature('../features/neo4j_read.feature', { loadRelativePath: true });
 
@@ -19,10 +34,12 @@ beforeEach(() => {
   result = [];
   dataset = [];
 
-  process.env.DATABASE_HOST = 'host_url';
-  process.env.DATABASE_USER = 'username';
-  process.env.DATABASE_PASS = 'password';
-  process.env.DATABASE_BASE = 'database';
+  clearConnections();
+
+  process.env.NEO4J_HOST = 'host_url';
+  process.env.NEO4J_USER = 'username';
+  process.env.NEO4J_PASS = 'password';
+  process.env.NEO4J_BASE = 'database';
 });
 
 const stepDefinitions: StepDefinitions = ({ given, and, when, then }) => {
@@ -30,10 +47,10 @@ const stepDefinitions: StepDefinitions = ({ given, and, when, then }) => {
     dataset = mapToSouthAmericanWorldCupWinner(table);
   });
   and(/^that (.*) is not provided$/, (variable: string) => {
-    if (variable == 'DATABASE_HOST') process.env.DATABASE_HOST = undefined;
-    if (variable == 'DATABASE_USER') process.env.DATABASE_USER = undefined;
-    if (variable == 'DATABASE_PASS') process.env.DATABASE_PASS = undefined;
-    if (variable == 'DATABASE_BASE') process.env.DATABASE_BASE = undefined;
+    if (variable == 'NEO4J_HOST') process.env.NEO4J_HOST = '';
+    if (variable == 'NEO4J_USER') process.env.NEO4J_USER = '';
+    if (variable == 'NEO4J_PASS') process.env.NEO4J_PASS = '';
+    if (variable == 'NEO4J_BASE') process.env.NEO4J_BASE = '';
   });
   when(/^trying to fetch data with "(.*)"$/, async (query: string) => {
     try {

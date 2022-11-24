@@ -1,15 +1,15 @@
 import type { Driver, Session, SessionMode } from 'neo4j-driver';
-import { auth, driver, session } from 'neo4j-driver';
+import neo4j from 'neo4j-driver';
 import { ErrorResponse } from '../utils/errors';
 
-let readSession: Session | undefined;
-let currentDriver: Driver | undefined;
+let readSession: Session;
+let currentDriver: Driver;
 
 const driverOptions = {
   connectionTimeout: 5000,
   maxConnectionLifetime: 10000,
   maxConnectionPoolSize: 25,
-  disableLosslessIntegers: true,
+  disableLosslessIntegers: true, // forces neo4j to return normal integers
   connectionAcquisitionTimeout: 2000,
 };
 
@@ -23,27 +23,21 @@ function validateParams() {
   return errors;
 }
 
-// makes sure there always is a driver available
-// if none are, we create a new instance
-function getDriver() {
-  if (!currentDriver)
-    currentDriver = driver(
-      // @ts-ignore If NEO4J_HOST is empty an error will be thrown before getting here
-      process.env.NEO4J_HOST,
-      // @ts-ignore If NEO4J_USER is empty an error will be thrown before getting here
-      auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS),
-      driverOptions,
-    );
-
-  return currentDriver;
-}
 // this function handles the database connection
 function getSession(mode: SessionMode) {
   const errors = validateParams();
   try {
     if (errors.length > 0) throw errors;
 
-    return getDriver().session({
+    currentDriver = neo4j.driver(
+      // @ts-ignore If NEO4J_HOST is empty an error will be thrown before getting here
+      process.env.NEO4J_HOST,
+      // @ts-ignore If NEO4J_USER is empty an error will be thrown before getting here
+      neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS),
+      driverOptions,
+    );
+
+    return currentDriver.session({
       database: process.env.NEO4J_BASE,
       defaultAccessMode: mode,
     });
@@ -54,7 +48,7 @@ function getSession(mode: SessionMode) {
 // makes sure there always is a reader available
 // if none are, we create a new instance
 function getReader() {
-  if (!readSession) readSession = getSession(session.READ);
+  if (!readSession) readSession = getSession(neo4j.session.READ);
 
   return readSession;
 }
@@ -64,8 +58,4 @@ export function readFromNeo4J(query: string) {
     const result = tx.run(query);
     return result;
   });
-}
-export function clearConnections() {
-  readSession = undefined;
-  currentDriver = undefined;
 }
